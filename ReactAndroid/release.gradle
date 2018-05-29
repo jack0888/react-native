@@ -12,15 +12,15 @@ def isReleaseBuild() {
 }
 
 def getRepositoryUrl() {
-    return hasProperty('repositoryUrl') ? property('repositoryUrl') : 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+    return project.hasProperty('repositoryUrl') ? property('repositoryUrl') : 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
 }
 
 def getRepositoryUsername() {
-    return hasProperty('repositoryUsername') ? property('repositoryUsername') : ''
+    return project.hasProperty('repositoryUsername') ? property('repositoryUsername') : ''
 }
 
 def getRepositoryPassword() {
-    return hasProperty('repositoryPassword') ? property('repositoryPassword') : ''
+    return project.hasProperty('repositoryPassword') ? property('repositoryPassword') : ''
 }
 
 def configureReactNativePom(def pom) {
@@ -39,7 +39,7 @@ def configureReactNativePom(def pom) {
 
         licenses {
             license {
-                name 'BSD License'
+                name 'MIT License'
                 url 'https://github.com/facebook/react-native/blob/master/LICENSE'
                 distribution 'repo'
             }
@@ -52,6 +52,14 @@ def configureReactNativePom(def pom) {
             }
         }
     }
+}
+
+if (JavaVersion.current().isJava8Compatible()) {
+  allprojects {
+    tasks.withType(Javadoc) {
+      options.addStringOption('Xdoclint:none', '-quiet')
+    }
+  }
 }
 
 afterEvaluate { project ->
@@ -84,8 +92,7 @@ afterEvaluate { project ->
 
     artifacts {
         archives androidSourcesJar
-        // TODO Make Javadoc generation work with Java 1.8, currently only works with 1.7
-        // archives androidJavadocJar
+        archives androidJavadocJar
     }
 
     version = VERSION_NAME
@@ -117,11 +124,9 @@ afterEvaluate { project ->
     task installArchives(type: Upload) {
         configuration = configurations.archives
         repositories.mavenDeployer {
-            beforeDeployment {
-                MavenDeployment deployment -> signing.signPom(deployment)
-            }
+            // Deploy to react-native/android, ready to publish to npm
+            repository url: "file://${projectDir}/../android"
 
-            repository url: "file://${System.properties['user.home']}/.m2/repository"
             configureReactNativePom pom
         }
     }

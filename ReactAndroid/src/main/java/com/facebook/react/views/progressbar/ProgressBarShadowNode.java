@@ -1,14 +1,13 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.react.views.progressbar;
 
+import com.facebook.react.uimanager.ReactShadowNodeImpl;
 import javax.annotation.Nullable;
 
 import java.util.HashSet;
@@ -19,42 +18,82 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
 
-import com.facebook.csslayout.CSSNode;
-import com.facebook.csslayout.MeasureOutput;
-import com.facebook.react.uimanager.CatalystStylesDiffMap;
-import com.facebook.react.uimanager.ReactShadowNode;
-import com.facebook.infer.annotation.Assertions;
+import com.facebook.yoga.YogaMeasureMode;
+import com.facebook.yoga.YogaMeasureFunction;
+import com.facebook.yoga.YogaNode;
+import com.facebook.yoga.YogaMeasureOutput;
+import com.facebook.react.uimanager.LayoutShadowNode;
+import com.facebook.react.uimanager.annotations.ReactProp;
 
 /**
  * Node responsible for holding the style of the ProgressBar, see under
  * {@link android.R.attr.progressBarStyle} for possible styles. ReactProgressBarViewManager
  * manages how this style is applied to the ProgressBar.
  */
-public class ProgressBarShadowNode extends ReactShadowNode implements CSSNode.MeasureFunction {
+public class ProgressBarShadowNode extends LayoutShadowNode implements YogaMeasureFunction {
 
-  private @Nullable String style;
+  private String mStyle = ReactProgressBarViewManager.DEFAULT_STYLE;
 
-  private final SparseIntArray mHeight = new SparseIntArray();
-  private final SparseIntArray mWidth = new SparseIntArray();
-  private final Set<Integer> mMeasured = new HashSet<>();
+  private final SparseIntArray mHeight;
+  private final SparseIntArray mWidth;
+  private final Set<Integer> mMeasured;
 
   public ProgressBarShadowNode() {
-    setMeasureFunction(this);
+    mHeight = new SparseIntArray();
+    mWidth = new SparseIntArray();
+    mMeasured = new HashSet<>();
+    initMeasureFunction();
   }
 
-  public @Nullable String getStyle() {
-    return style;
-  }
-
-  public void setStyle(String style) {
-    this.style = style;
+  public ProgressBarShadowNode(ProgressBarShadowNode node) {
+    super(node);
+    mWidth = node.mWidth.clone();
+    mHeight = node.mHeight.clone();
+    mMeasured = new HashSet<>(node.mMeasured);
   }
 
   @Override
-  public void measure(CSSNode node, float width, MeasureOutput measureOutput) {
+  public ReactShadowNodeImpl mutableCopyWithNewChildren() {
+    ProgressBarShadowNode node = (ProgressBarShadowNode) super.mutableCopyWithNewChildren();
+    node.initMeasureFunction();
+    return node;
+  }
+
+  private void initMeasureFunction() {
+    setMeasureFunction(this);
+  }
+
+  @Override
+  public ReactShadowNodeImpl mutableCopy() {
+    ProgressBarShadowNode node = (ProgressBarShadowNode) super.mutableCopy();
+    node.initMeasureFunction();
+    return node;
+  }
+
+  @Override
+  public ProgressBarShadowNode copy() {
+    return new ProgressBarShadowNode(this);
+  }
+
+  public @Nullable String getStyle() {
+    return mStyle;
+  }
+
+  @ReactProp(name = ReactProgressBarViewManager.PROP_STYLE)
+  public void setStyle(@Nullable String style) {
+    mStyle = style == null ? ReactProgressBarViewManager.DEFAULT_STYLE : style;
+  }
+
+  @Override
+  public long measure(
+      YogaNode node,
+      float width,
+      YogaMeasureMode widthMode,
+      float height,
+      YogaMeasureMode heightMode) {
     final int style = ReactProgressBarViewManager.getStyleFromString(getStyle());
     if (!mMeasured.contains(style)) {
-      ProgressBar progressBar = new ProgressBar(getThemedContext(), null, style);
+      ProgressBar progressBar = ReactProgressBarViewManager.createProgressBar(getThemedContext(), style);
       final int spec = View.MeasureSpec.makeMeasureSpec(
           ViewGroup.LayoutParams.WRAP_CONTENT,
           View.MeasureSpec.UNSPECIFIED);
@@ -64,23 +103,6 @@ public class ProgressBarShadowNode extends ReactShadowNode implements CSSNode.Me
       mMeasured.add(style);
     }
 
-    measureOutput.height = mHeight.get(style);
-    measureOutput.width = mWidth.get(style);
-  }
-
-  @Override
-  public void updateProperties(CatalystStylesDiffMap styles) {
-    super.updateProperties(styles);
-
-    if (styles.hasKey(ReactProgressBarViewManager.PROP_STYLE)) {
-      String style = styles.getString(ReactProgressBarViewManager.PROP_STYLE);
-      Assertions.assertNotNull(
-          style,
-          "style property should always be set for the progress bar component");
-      // TODO(7255944): Validate progressbar style attribute
-      setStyle(style);
-    } else {
-      setStyle(ReactProgressBarViewManager.DEFAULT_STYLE);
-    }
+    return YogaMeasureOutput.make(mWidth.get(style), mHeight.get(style));
   }
 }

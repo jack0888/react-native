@@ -1,10 +1,8 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.react.modules.storage;
@@ -23,16 +21,20 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.common.ReactConstants;
-import com.facebook.react.common.SetBuilder;
+import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.common.ModuleDataCleaner;
 
 import static com.facebook.react.modules.storage.ReactDatabaseSupplier.KEY_COLUMN;
 import static com.facebook.react.modules.storage.ReactDatabaseSupplier.TABLE_CATALYST;
 import static com.facebook.react.modules.storage.ReactDatabaseSupplier.VALUE_COLUMN;
 
+@ReactModule(name = AsyncStorageModule.NAME)
 public final class AsyncStorageModule
     extends ReactContextBaseJavaModule implements ModuleDataCleaner.Cleanable {
+
+  protected static final String NAME = "AsyncSQLiteDBStorage";
 
   // SQL variable number limit, defined by SQLITE_LIMIT_VARIABLE_NUMBER:
   // https://raw.githubusercontent.com/android/platform_external_sqlite/master/dist/sqlite3.c
@@ -43,12 +45,12 @@ public final class AsyncStorageModule
 
   public AsyncStorageModule(ReactApplicationContext reactContext) {
     super(reactContext);
-    mReactDatabaseSupplier = new ReactDatabaseSupplier(reactContext);
+    mReactDatabaseSupplier = ReactDatabaseSupplier.getInstance(reactContext);
   }
 
   @Override
   public String getName() {
-    return "AsyncSQLiteDBStorage";
+    return NAME;
   }
 
   @Override
@@ -67,23 +69,7 @@ public final class AsyncStorageModule
     // Clear local storage. If fails, crash, since the app is potentially in a bad state and could
     // cause a privacy violation. We're still not recovering from this well, but at least the error
     // will be reported to the server.
-    clear(
-        new Callback() {
-          @Override
-          public void invoke(Object... args) {
-            if (args.length == 0) {
-              FLog.d(ReactConstants.TAG, "Cleaned AsyncLocalStorage.");
-              return;
-            }
-            // Clearing the database has failed, delete it instead.
-            if (mReactDatabaseSupplier.deleteDatabase()) {
-              FLog.d(ReactConstants.TAG, "Deleted Local Database AsyncLocalStorage.");
-              return;
-            }
-            // Everything failed, crash the app
-            throw new RuntimeException("Clearing and deleting database failed: " + args[0]);
-          }
-        });
+    mReactDatabaseSupplier.clearAndCloseDatabase();
   }
 
   /**
@@ -106,7 +92,7 @@ public final class AsyncStorageModule
         }
 
         String[] columns = {KEY_COLUMN, VALUE_COLUMN};
-        HashSet<String> keysRemaining = SetBuilder.newHashSet();
+        HashSet<String> keysRemaining = new HashSet<>();
         WritableArray data = Arguments.createArray();
         for (int keyStart = 0; keyStart < keys.size(); keyStart += MAX_SQL_KEYS) {
           int keyCount = Math.min(keys.size() - keyStart, MAX_SQL_KEYS);
@@ -137,8 +123,9 @@ public final class AsyncStorageModule
               } while (cursor.moveToNext());
             }
           } catch (Exception e) {
-            FLog.w(ReactConstants.TAG, "Exception in database multiGet ", e);
+            FLog.w(ReactConstants.TAG, e.getMessage(), e);
             callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()), null);
+            return;
           } finally {
             cursor.close();
           }
@@ -179,19 +166,20 @@ public final class AsyncStorageModule
 
         String sql = "INSERT OR REPLACE INTO " + TABLE_CATALYST + " VALUES (?, ?);";
         SQLiteStatement statement = mReactDatabaseSupplier.get().compileStatement(sql);
-        mReactDatabaseSupplier.get().beginTransaction();
+        WritableMap error = null;
         try {
+          mReactDatabaseSupplier.get().beginTransaction();
           for (int idx=0; idx < keyValueArray.size(); idx++) {
             if (keyValueArray.getArray(idx).size() != 2) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidValueError(null));
+              error = AsyncStorageErrorUtil.getInvalidValueError(null);
               return;
             }
             if (keyValueArray.getArray(idx).getString(0) == null) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidKeyError(null));
+              error = AsyncStorageErrorUtil.getInvalidKeyError(null);
               return;
             }
             if (keyValueArray.getArray(idx).getString(1) == null) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidValueError(null));
+              error = AsyncStorageErrorUtil.getInvalidValueError(null);
               return;
             }
 
@@ -202,12 +190,23 @@ public final class AsyncStorageModule
           }
           mReactDatabaseSupplier.get().setTransactionSuccessful();
         } catch (Exception e) {
-          FLog.w(ReactConstants.TAG, "Exception in database multiSet ", e);
-          callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()));
+          FLog.w(ReactConstants.TAG, e.getMessage(), e);
+          error = AsyncStorageErrorUtil.getError(null, e.getMessage());
         } finally {
-          mReactDatabaseSupplier.get().endTransaction();
+          try {
+            mReactDatabaseSupplier.get().endTransaction();
+          } catch (Exception e) {
+            FLog.w(ReactConstants.TAG, e.getMessage(), e);
+            if (error == null) {
+              error = AsyncStorageErrorUtil.getError(null, e.getMessage());
+            }
+          }
         }
-        callback.invoke();
+        if (error != null) {
+          callback.invoke(error);
+        } else {
+          callback.invoke();
+        }
       }
     }.execute();
   }
@@ -230,8 +229,9 @@ public final class AsyncStorageModule
           return;
         }
 
-        mReactDatabaseSupplier.get().beginTransaction();
+        WritableMap error = null;
         try {
+          mReactDatabaseSupplier.get().beginTransaction();
           for (int keyStart = 0; keyStart < keys.size(); keyStart += MAX_SQL_KEYS) {
             int keyCount = Math.min(keys.size() - keyStart, MAX_SQL_KEYS);
             mReactDatabaseSupplier.get().delete(
@@ -241,12 +241,23 @@ public final class AsyncStorageModule
           }
           mReactDatabaseSupplier.get().setTransactionSuccessful();
         } catch (Exception e) {
-          FLog.w(ReactConstants.TAG, "Exception in database multiRemove ", e);
-          callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()));
+          FLog.w(ReactConstants.TAG, e.getMessage(), e);
+          error = AsyncStorageErrorUtil.getError(null, e.getMessage());
         } finally {
+          try {
           mReactDatabaseSupplier.get().endTransaction();
+          } catch (Exception e) {
+            FLog.w(ReactConstants.TAG, e.getMessage(), e);
+            if (error == null) {
+              error = AsyncStorageErrorUtil.getError(null, e.getMessage());
+            }
+          }
         }
-        callback.invoke();
+        if (error != null) {
+          callback.invoke(error);
+        } else {
+          callback.invoke();
+        }
       }
     }.execute();
   }
@@ -264,21 +275,22 @@ public final class AsyncStorageModule
           callback.invoke(AsyncStorageErrorUtil.getDBError(null));
           return;
         }
-        mReactDatabaseSupplier.get().beginTransaction();
+        WritableMap error = null;
         try {
+          mReactDatabaseSupplier.get().beginTransaction();
           for (int idx = 0; idx < keyValueArray.size(); idx++) {
             if (keyValueArray.getArray(idx).size() != 2) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidValueError(null));
+              error = AsyncStorageErrorUtil.getInvalidValueError(null);
               return;
             }
 
             if (keyValueArray.getArray(idx).getString(0) == null) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidKeyError(null));
+              error = AsyncStorageErrorUtil.getInvalidKeyError(null);
               return;
             }
 
             if (keyValueArray.getArray(idx).getString(1) == null) {
-              callback.invoke(AsyncStorageErrorUtil.getInvalidValueError(null));
+              error = AsyncStorageErrorUtil.getInvalidValueError(null);
               return;
             }
 
@@ -286,18 +298,29 @@ public final class AsyncStorageModule
                 mReactDatabaseSupplier.get(),
                 keyValueArray.getArray(idx).getString(0),
                 keyValueArray.getArray(idx).getString(1))) {
-              callback.invoke(AsyncStorageErrorUtil.getDBError(null));
+              error = AsyncStorageErrorUtil.getDBError(null);
               return;
             }
           }
           mReactDatabaseSupplier.get().setTransactionSuccessful();
         } catch (Exception e) {
           FLog.w(ReactConstants.TAG, e.getMessage(), e);
-          callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()));
+          error = AsyncStorageErrorUtil.getError(null, e.getMessage());
         } finally {
-          mReactDatabaseSupplier.get().endTransaction();
+          try {
+            mReactDatabaseSupplier.get().endTransaction();
+          } catch (Exception e) {
+            FLog.w(ReactConstants.TAG, e.getMessage(), e);
+            if (error == null) {
+              error = AsyncStorageErrorUtil.getError(null, e.getMessage());
+            }
+          }
         }
-        callback.invoke();
+        if (error != null) {
+          callback.invoke(error);
+        } else {
+          callback.invoke();
+        }
       }
     }.execute();
   }
@@ -315,12 +338,12 @@ public final class AsyncStorageModule
           return;
         }
         try {
-          mReactDatabaseSupplier.get().delete(TABLE_CATALYST, null, null);
+          mReactDatabaseSupplier.clear();
+          callback.invoke();
         } catch (Exception e) {
-          FLog.w(ReactConstants.TAG, "Exception in database clear ", e);
+          FLog.w(ReactConstants.TAG, e.getMessage(), e);
           callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()));
         }
-        callback.invoke();
       }
     }.execute();
   }
@@ -348,8 +371,9 @@ public final class AsyncStorageModule
             } while (cursor.moveToNext());
           }
         } catch (Exception e) {
-          FLog.w(ReactConstants.TAG, "Exception in database getAllKeys ", e);
+          FLog.w(ReactConstants.TAG, e.getMessage(), e);
           callback.invoke(AsyncStorageErrorUtil.getError(null, e.getMessage()), null);
+          return;
         } finally {
           cursor.close();
         }

@@ -1,17 +1,15 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.react.bridge;
 
 import com.facebook.infer.annotation.Assertions;
+import com.facebook.jni.HybridData;
 import com.facebook.proguard.annotations.DoNotStrip;
-import com.facebook.soloader.SoLoader;
 
 /**
  * Implementation of a write-only array stored in native memory. Use
@@ -20,9 +18,12 @@ import com.facebook.soloader.SoLoader;
  */
 @DoNotStrip
 public class WritableNativeArray extends ReadableNativeArray implements WritableArray {
-
   static {
-    SoLoader.loadLibrary(ReactBridge.REACT_NATIVE_LIB);
+    ReactBridge.staticInit();
+  }
+
+  public WritableNativeArray() {
+    super(initHybrid());
   }
 
   @Override
@@ -52,6 +53,7 @@ public class WritableNativeArray extends ReadableNativeArray implements Writable
     pushNativeMap((WritableNativeMap) map);
   }
 
+  private static native HybridData initHybrid();
   private native void pushNativeArray(WritableNativeArray array);
   private native void pushNativeMap(WritableNativeMap map);
 }

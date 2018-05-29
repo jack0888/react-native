@@ -1,32 +1,49 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule ProgressViewIOS
+ * @format
  * @flow
  */
+
 'use strict';
 
-var Image = require('Image');
-var NativeMethodsMixin = require('NativeMethodsMixin');
-var NativeModules = require('NativeModules');
-var PropTypes = require('ReactPropTypes');
-var React = require('React');
-var StyleSheet = require('StyleSheet');
+const Image = require('Image');
+const NativeMethodsMixin = require('NativeMethodsMixin');
+const React = require('React');
+const ReactNative = require('ReactNative');
+const PropTypes = require('prop-types');
+const StyleSheet = require('StyleSheet');
+const ViewPropTypes = require('ViewPropTypes');
 
-var requireNativeComponent = require('requireNativeComponent');
+const createReactClass = require('create-react-class');
+const requireNativeComponent = require('requireNativeComponent');
+
+import type {ImageSource} from 'ImageSource';
+import type {ColorValue} from 'StyleSheetTypes';
+import type {ViewProps} from 'ViewPropTypes';
+
+type Props = $ReadOnly<{|
+  ...ViewProps,
+  progressViewStyle?: ?('default' | 'bar'),
+  progress?: ?number,
+  progressTintColor?: ?ColorValue,
+  trackTintColor?: ?string,
+  progressImage?: ?ImageSource,
+  trackImage?: ?ImageSource,
+|}>;
 
 /**
  * Use `ProgressViewIOS` to render a UIProgressView on iOS.
  */
-var ProgressViewIOS = React.createClass({
+const ProgressViewIOS = createReactClass({
+  displayName: 'ProgressViewIOS',
   mixins: [NativeMethodsMixin],
 
   propTypes: {
+    ...ViewPropTypes,
     /**
      * The progress bar style.
      */
@@ -65,18 +82,20 @@ var ProgressViewIOS = React.createClass({
         style={[styles.progressView, this.props.style]}
       />
     );
-  }
-});
-
-var styles = StyleSheet.create({
-  progressView: {
-    height: NativeModules.ProgressViewManager.ComponentHeight
   },
 });
 
-var RCTProgressView = requireNativeComponent(
+const styles = StyleSheet.create({
+  progressView: {
+    height: 2,
+  },
+});
+
+const RCTProgressView = requireNativeComponent(
   'RCTProgressView',
-  ProgressViewIOS
+  ProgressViewIOS,
 );
 
-module.exports = ProgressViewIOS;
+module.exports = ((ProgressViewIOS: any): Class<
+  ReactNative.NativeComponent<Props>,
+>);

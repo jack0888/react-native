@@ -1,47 +1,80 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule SegmentedControlIOS
+ * @format
  * @flow
  */
+
 'use strict';
 
-var NativeMethodsMixin = require('NativeMethodsMixin');
-var NativeModules = require('NativeModules');
-var PropTypes = require('ReactPropTypes');
-var React = require('React');
-var StyleSheet = require('StyleSheet');
+const NativeMethodsMixin = require('NativeMethodsMixin');
+const React = require('React');
+const ReactNative = require('ReactNative');
+const PropTypes = require('prop-types');
+const StyleSheet = require('StyleSheet');
+const ViewPropTypes = require('ViewPropTypes');
 
-var requireNativeComponent = require('requireNativeComponent');
+const createReactClass = require('create-react-class');
+const requireNativeComponent = require('requireNativeComponent');
+
+import type {ViewProps} from 'ViewPropTypes';
 
 type DefaultProps = {
-  values: Array<string>;
-  enabled: boolean;
+  values: $ReadOnlyArray<string>,
+  enabled: boolean,
 };
 
-var SEGMENTED_CONTROL_REFERENCE = 'segmentedcontrol';
+type Props = $ReadOnly<{|
+  ...ViewProps,
+  values?: ?$ReadOnlyArray<string>,
+  selectedIndex?: ?number,
+  onValueChange?: ?Function,
+  onChange?: ?Function,
+  enabled?: ?boolean,
+  tintColor?: ?string,
+  momentary?: ?boolean,
+|}>;
+
+const SEGMENTED_CONTROL_REFERENCE = 'segmentedcontrol';
 
 type Event = Object;
 
 /**
  * Use `SegmentedControlIOS` to render a UISegmentedControl iOS.
+ *
+ * #### Programmatically changing selected index
+ *
+ * The selected index can be changed on the fly by assigning the
+ * selectedIndex prop to a state variable, then changing that variable.
+ * Note that the state variable would need to be updated as the user
+ * selects a value and changes the index, as shown in the example below.
+ *
+ * ````
+ * <SegmentedControlIOS
+ *   values={['One', 'Two']}
+ *   selectedIndex={this.state.selectedIndex}
+ *   onChange={(event) => {
+ *     this.setState({selectedIndex: event.nativeEvent.selectedSegmentIndex});
+ *   }}
+ * />
+ * ````
  */
-var SegmentedControlIOS = React.createClass({
+const SegmentedControlIOS = createReactClass({
+  displayName: 'SegmentedControlIOS',
   mixins: [NativeMethodsMixin],
 
   propTypes: {
+    ...ViewPropTypes,
     /**
      * The labels for the control's segment buttons, in order.
      */
     values: PropTypes.arrayOf(PropTypes.string),
 
     /**
-     * The index in `props.values` of the segment to be pre-selected
+     * The index in `props.values` of the segment to be (pre)selected.
      */
     selectedIndex: PropTypes.number,
 
@@ -72,19 +105,20 @@ var SegmentedControlIOS = React.createClass({
      * If true, then selecting a segment won't persist visually.
      * The `onValueChange` callback will still work as expected.
      */
-    momentary: PropTypes.bool
+    momentary: PropTypes.bool,
   },
 
   getDefaultProps: function(): DefaultProps {
     return {
       values: [],
-      enabled: true
+      enabled: true,
     };
   },
 
   _onChange: function(event: Event) {
     this.props.onChange && this.props.onChange(event);
-    this.props.onValueChange && this.props.onValueChange(event.nativeEvent.value);
+    this.props.onValueChange &&
+      this.props.onValueChange(event.nativeEvent.value);
   },
 
   render: function() {
@@ -96,18 +130,20 @@ var SegmentedControlIOS = React.createClass({
         onChange={this._onChange}
       />
     );
-  }
-});
-
-var styles = StyleSheet.create({
-  segmentedControl: {
-    height: NativeModules.SegmentedControlManager.ComponentHeight
   },
 });
 
-var RCTSegmentedControl = requireNativeComponent(
+const styles = StyleSheet.create({
+  segmentedControl: {
+    height: 28,
+  },
+});
+
+const RCTSegmentedControl = requireNativeComponent(
   'RCTSegmentedControl',
-  SegmentedControlIOS
+  SegmentedControlIOS,
 );
 
-module.exports = SegmentedControlIOS;
+module.exports = ((SegmentedControlIOS: any): Class<
+  ReactNative.NativeComponent<Props>,
+>);

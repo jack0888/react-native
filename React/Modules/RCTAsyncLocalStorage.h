@@ -1,14 +1,12 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
-#import "RCTBridgeModule.h"
-#import "RCTInvalidating.h"
+#import <React/RCTBridgeModule.h>
+#import <React/RCTInvalidating.h>
 
 /**
  * A simple, asynchronous, persistent, key-value storage system designed as a
@@ -27,11 +25,8 @@
 
 @property (nonatomic, readonly, getter=isValid) BOOL valid;
 
-- (void)multiGet:(NSArray *)keys callback:(RCTResponseSenderBlock)callback;
-- (void)multiSet:(NSArray *)kvPairs callback:(RCTResponseSenderBlock)callback;
-- (void)multiRemove:(NSArray *)keys callback:(RCTResponseSenderBlock)callback;
-- (void)clear:(RCTResponseSenderBlock)callback;
-- (void)getAllKeys:(RCTResponseSenderBlock)callback;
+// Clear the RCTAsyncLocalStorage data from native code
+- (void)clearAllData;
 
 // For clearing data when the bridge may not exist, e.g. when logging out.
 + (void)clearAllData;

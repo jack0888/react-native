@@ -1,13 +1,13 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #import <UIKit/UIKit.h>
+
+#import <React/RCTBorderStyle.h>
 
 typedef struct {
   CGFloat topLeft;
@@ -39,6 +39,7 @@ BOOL RCTBorderColorsAreEqual(RCTBorderColors borderColors);
 
 /**
  * Convert RCTCornerRadii to RCTCornerInsets by applying border insets.
+ * Effectively, returns radius - inset, with a lower bound of 0.0.
  */
 RCTCornerInsets RCTGetCornerInsets(RCTCornerRadii cornerRadii,
                                    UIEdgeInsets borderInsets);
@@ -52,9 +53,14 @@ CGPathRef RCTPathCreateWithRoundedRect(CGRect bounds,
                                        const CGAffineTransform *transform);
 
 /**
- * Draw a CSS-compliant border as a scalable image.
+ * Draw a CSS-compliant border as an image. You can determine if it's scalable
+ * by inspecting the image's `capInsets`.
+ *
+ * `borderInsets` defines the border widths for each edge.
  */
-UIImage *RCTGetBorderImage(RCTCornerRadii cornerRadii,
+UIImage *RCTGetBorderImage(RCTBorderStyle borderStyle,
+                           CGSize viewSize,
+                           RCTCornerRadii cornerRadii,
                            UIEdgeInsets borderInsets,
                            RCTBorderColors borderColors,
                            CGColorRef backgroundColor,

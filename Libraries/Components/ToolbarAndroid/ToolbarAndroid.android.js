@@ -1,23 +1,33 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule ToolbarAndroid
+ * @format
  */
 
 'use strict';
 
-var Image = require('Image');
-var NativeMethodsMixin = require('NativeMethodsMixin');
-var React = require('React');
-var ReactNativeViewAttributes = require('ReactNativeViewAttributes');
-var ReactPropTypes = require('ReactPropTypes');
+const Image = require('Image');
+const NativeMethodsMixin = require('NativeMethodsMixin');
+const React = require('React');
+const PropTypes = require('prop-types');
+const ReactNativeViewAttributes = require('ReactNativeViewAttributes');
+const UIManager = require('UIManager');
+const ViewPropTypes = require('ViewPropTypes');
+const ColorPropType = require('ColorPropType');
 
-var requireNativeComponent = require('requireNativeComponent');
+const createReactClass = require('create-react-class');
+const requireNativeComponent = require('requireNativeComponent');
+const resolveAssetSource = require('resolveAssetSource');
+
+const optionalImageSource = PropTypes.oneOfType([
+  Image.propTypes.source,
+  // Image.propTypes.source is required but we want it to be optional, so we OR
+  // it with a nullable propType.
+  PropTypes.oneOf([]),
+]);
 
 /**
  * React component that wraps the Android-only [`Toolbar` widget][0]. A Toolbar can display a logo,
@@ -27,15 +37,21 @@ var requireNativeComponent = require('requireNativeComponent');
  *
  * If the toolbar has an only child, it will be displayed between the title and actions.
  *
+ * Although the Toolbar supports remote images for the logo, navigation and action icons, this
+ * should only be used in DEV mode where `require('./some_icon.png')` translates into a packager
+ * URL. In release mode you should always use a drawable resource for these icons. Using
+ * `require('./some_icon.png')` will do this automatically for you, so as long as you don't
+ * explicitly use e.g. `{uri: 'http://...'}`, you will be good.
+ *
  * Example:
  *
  * ```
  * render: function() {
  *   return (
  *     <ToolbarAndroid
- *       logo={require('image!app_logo')}
+ *       logo={require('./app_logo.png')}
  *       title="AwesomeApp"
- *       actions={[{title: 'Settings', icon: require('image!icon_settings'), show: 'always'}]}
+ *       actions={[{title: 'Settings', icon: require('./icon_settings.png'), show: 'always'}]}
  *       onActionSelected={this.onActionSelected} />
  *   )
  * },
@@ -48,10 +64,12 @@ var requireNativeComponent = require('requireNativeComponent');
  *
  * [0]: https://developer.android.com/reference/android/support/v7/widget/Toolbar.html
  */
-var ToolbarAndroid = React.createClass({
+const ToolbarAndroid = createReactClass({
+  displayName: 'ToolbarAndroid',
   mixins: [NativeMethodsMixin],
 
   propTypes: {
+    ...ViewPropTypes,
     /**
      * Sets possible actions on the toolbar as part of the action menu. These are displayed as icons
      * or text on the right side of the widget. If they don't fit they are placed in an 'overflow'
@@ -60,93 +78,127 @@ var ToolbarAndroid = React.createClass({
      * This property takes an array of objects, where each object has the following keys:
      *
      * * `title`: **required**, the title of this action
-     * * `icon`: the icon for this action, e.g. `require('image!some_icon')`
+     * * `icon`: the icon for this action, e.g. `require('./some_icon.png')`
      * * `show`: when to show this action as an icon or hide it in the overflow menu: `always`,
      * `ifRoom` or `never`
      * * `showWithText`: boolean, whether to show text alongside the icon or not
      */
-    actions: ReactPropTypes.arrayOf(ReactPropTypes.shape({
-      title: ReactPropTypes.string.isRequired,
-      icon: Image.propTypes.source,
-      show: ReactPropTypes.oneOf(['always', 'ifRoom', 'never']),
-      showWithText: ReactPropTypes.bool
-    })),
+    actions: PropTypes.arrayOf(
+      PropTypes.shape({
+        title: PropTypes.string.isRequired,
+        icon: optionalImageSource,
+        show: PropTypes.oneOf(['always', 'ifRoom', 'never']),
+        showWithText: PropTypes.bool,
+      }),
+    ),
     /**
      * Sets the toolbar logo.
      */
-    logo: Image.propTypes.source,
+    logo: optionalImageSource,
     /**
      * Sets the navigation icon.
      */
-    navIcon: Image.propTypes.source,
+    navIcon: optionalImageSource,
     /**
-     * Callback that is called when an action is selected. The only argument that is passeed to the
+     * Callback that is called when an action is selected. The only argument that is passed to the
      * callback is the position of the action in the actions array.
      */
-    onActionSelected: ReactPropTypes.func,
+    onActionSelected: PropTypes.func,
     /**
      * Callback called when the icon is selected.
      */
-    onIconClicked: ReactPropTypes.func,
+    onIconClicked: PropTypes.func,
+    /**
+     * Sets the overflow icon.
+     */
+    overflowIcon: optionalImageSource,
     /**
      * Sets the toolbar subtitle.
      */
-    subtitle: ReactPropTypes.string,
+    subtitle: PropTypes.string,
     /**
      * Sets the toolbar subtitle color.
      */
-    subtitleColor: ReactPropTypes.string,
+    subtitleColor: ColorPropType,
     /**
      * Sets the toolbar title.
      */
-    title: ReactPropTypes.string,
+    title: PropTypes.string,
     /**
      * Sets the toolbar title color.
      */
-    titleColor: ReactPropTypes.string,
+    titleColor: ColorPropType,
+    /**
+     * Sets the content inset for the toolbar starting edge.
+     *
+     * The content inset affects the valid area for Toolbar content other than
+     * the navigation button and menu. Insets define the minimum margin for
+     * these components and can be used to effectively align Toolbar content
+     * along well-known gridlines.
+     */
+    contentInsetStart: PropTypes.number,
+    /**
+     * Sets the content inset for the toolbar ending edge.
+     *
+     * The content inset affects the valid area for Toolbar content other than
+     * the navigation button and menu. Insets define the minimum margin for
+     * these components and can be used to effectively align Toolbar content
+     * along well-known gridlines.
+     */
+    contentInsetEnd: PropTypes.number,
+    /**
+     * Used to set the toolbar direction to RTL.
+     * In addition to this property you need to add
+     *
+     *   android:supportsRtl="true"
+     *
+     * to your application AndroidManifest.xml and then call
+     * `setLayoutDirection(LayoutDirection.RTL)` in your MainActivity
+     * `onCreate` method.
+     */
+    rtl: PropTypes.bool,
     /**
      * Used to locate this view in end-to-end tests.
      */
-    testID: ReactPropTypes.string,
+    testID: PropTypes.string,
   },
 
   render: function() {
-    var nativeProps = {
+    const nativeProps = {
       ...this.props,
     };
     if (this.props.logo) {
-      if (!this.props.logo.isStatic) {
-        throw 'logo prop should be a static image (obtained via ix)';
-      }
-      nativeProps.logo = this.props.logo.uri;
+      nativeProps.logo = resolveAssetSource(this.props.logo);
     }
     if (this.props.navIcon) {
-      if (!this.props.navIcon.isStatic) {
-        throw 'navIcon prop should be static image (obtained via ix)';
-      }
-      nativeProps.navIcon = this.props.navIcon.uri;
+      nativeProps.navIcon = resolveAssetSource(this.props.navIcon);
+    }
+    if (this.props.overflowIcon) {
+      nativeProps.overflowIcon = resolveAssetSource(this.props.overflowIcon);
     }
     if (this.props.actions) {
-      nativeProps.actions = [];
-      for (var i = 0; i < this.props.actions.length; i++) {
-        var action = {
+      const nativeActions = [];
+      for (let i = 0; i < this.props.actions.length; i++) {
+        const action = {
           ...this.props.actions[i],
         };
         if (action.icon) {
-          if (!action.icon.isStatic) {
-            throw 'action icons should be static images (obtained via ix)';
-          }
-          action.icon = action.icon.uri;
+          action.icon = resolveAssetSource(action.icon);
         }
-        nativeProps.actions.push(action);
+        if (action.show) {
+          action.show =
+            UIManager.ToolbarAndroid.Constants.ShowAsAction[action.show];
+        }
+        nativeActions.push(action);
       }
+      nativeProps.nativeActions = nativeActions;
     }
 
     return <NativeToolbar onSelect={this._onSelect} {...nativeProps} />;
   },
 
   _onSelect: function(event) {
-    var position = event.nativeEvent.position;
+    const position = event.nativeEvent.position;
     if (position === -1) {
       this.props.onIconClicked && this.props.onIconClicked();
     } else {
@@ -155,17 +207,10 @@ var ToolbarAndroid = React.createClass({
   },
 });
 
-var toolbarAttributes = {
-  ...ReactNativeViewAttributes.UIView,
-  actions: true,
-  logo: true,
-  navIcon: true,
-  subtitle: true,
-  subtitleColor: true,
-  title: true,
-  titleColor: true,
-};
-
-var NativeToolbar = requireNativeComponent('ToolbarAndroid', null);
+const NativeToolbar = requireNativeComponent('ToolbarAndroid', ToolbarAndroid, {
+  nativeOnly: {
+    nativeActions: true,
+  },
+});
 
 module.exports = ToolbarAndroid;

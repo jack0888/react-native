@@ -1,23 +1,25 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule LayoutAnimation
  * @flow
+ * @format
  */
 'use strict';
 
-var PropTypes = require('ReactPropTypes');
-var RCTUIManager = require('NativeModules').UIManager;
+const PropTypes = require('prop-types');
+const UIManager = require('UIManager');
 
-var createStrictShapeTypeChecker = require('createStrictShapeTypeChecker');
-var keyMirror = require('keyMirror');
+/* $FlowFixMe(>=0.54.0 site=react_native_oss) This comment suppresses an error
+ * found when Flow v0.54 was deployed. To see the error delete this comment and
+ * run Flow. */
+const keyMirror = require('fbjs/lib/keyMirror');
 
-var TypesEnum = {
+const {checkPropTypes} = PropTypes;
+
+const TypesEnum = {
   spring: true,
   linear: true,
   easeInEaseOut: true,
@@ -25,54 +27,65 @@ var TypesEnum = {
   easeOut: true,
   keyboard: true,
 };
-var Types = keyMirror(TypesEnum);
+const Types = keyMirror(TypesEnum);
 
-var PropertiesEnum = {
+const PropertiesEnum = {
   opacity: true,
+  scaleX: true,
+  scaleY: true,
   scaleXY: true,
 };
-var Properties = keyMirror(PropertiesEnum);
+const Properties = keyMirror(PropertiesEnum);
 
-var animChecker = createStrictShapeTypeChecker({
+const animType = PropTypes.shape({
   duration: PropTypes.number,
   delay: PropTypes.number,
   springDamping: PropTypes.number,
   initialVelocity: PropTypes.number,
-  type: PropTypes.oneOf(
-    Object.keys(Types)
-  ),
-  property: PropTypes.oneOf( // Only applies to create/delete
-    Object.keys(Properties)
+  type: PropTypes.oneOf(Object.keys(Types)).isRequired,
+  property: PropTypes.oneOf(
+    // Only applies to create/delete
+    Object.keys(Properties),
   ),
 });
 
 type Anim = {
-  duration?: number;
-  delay?: number;
-  springDamping?: number;
-  initialVelocity?: number;
-  type?: $Enum<typeof TypesEnum>;
-  property?: $Enum<typeof PropertiesEnum>;
-}
+  duration?: number,
+  delay?: number,
+  springDamping?: number,
+  initialVelocity?: number,
+  type?: $Enum<typeof TypesEnum>,
+  property?: $Enum<typeof PropertiesEnum>,
+};
 
-var configChecker = createStrictShapeTypeChecker({
+const configType = PropTypes.shape({
   duration: PropTypes.number.isRequired,
-  create: animChecker,
-  update: animChecker,
-  delete: animChecker,
+  create: animType,
+  update: animType,
+  delete: animType,
 });
 
 type Config = {
-  duration: number;
-  create?: Anim;
-  update?: Anim;
-  delete?: Anim;
+  duration: number,
+  create?: Anim,
+  update?: Anim,
+  delete?: Anim,
+};
+
+function checkConfig(config: Config, location: string, name: string) {
+  checkPropTypes({config: configType}, {config}, location, name);
 }
 
 function configureNext(config: Config, onAnimationDidEnd?: Function) {
-  configChecker({config}, 'config', 'LayoutAnimation.configureNext');
-  RCTUIManager.configureNextLayoutAnimation(
-    config, onAnimationDidEnd || function() {}, function() { /* unused */ }
+  if (__DEV__) {
+    checkConfig(config, 'config', 'LayoutAnimation.configureNext');
+  }
+  UIManager.configureNextLayoutAnimation(
+    config,
+    onAnimationDidEnd || function() {},
+    function() {
+      /* unused */
+    },
   );
 }
 
@@ -86,16 +99,16 @@ function create(duration: number, type, creationProp): Config {
     update: {
       type,
     },
+    delete: {
+      type,
+      property: creationProp,
+    },
   };
 }
 
-var Presets = {
-  easeInEaseOut: create(
-    300, Types.easeInEaseOut, Properties.opacity
-  ),
-  linear: create(
-    500, Types.linear, Properties.opacity
-  ),
+const Presets = {
+  easeInEaseOut: create(300, Types.easeInEaseOut, Properties.opacity),
+  linear: create(500, Types.linear, Properties.opacity),
   spring: {
     duration: 700,
     create: {
@@ -106,6 +119,10 @@ var Presets = {
       type: Types.spring,
       springDamping: 0.4,
     },
+    delete: {
+      type: Types.linear,
+      property: Properties.opacity,
+    },
   },
 };
 
@@ -113,10 +130,13 @@ var Presets = {
  * Automatically animates views to their new positions when the
  * next layout happens.
  *
- * A common way to use this API is to call `LayoutAnimation.configureNext`
- * before calling `setState`.
+ * A common way to use this API is to call it before calling `setState`.
+ *
+ * Note that in order to get this to work on **Android** you need to set the following flags via `UIManager`:
+ *
+ *     UIManager.setLayoutAnimationEnabledExperimental && UIManager.setLayoutAnimationEnabledExperimental(true);
  */
-var LayoutAnimation = {
+const LayoutAnimation = {
   /**
    * Schedules an animation to happen on the next layout.
    *
@@ -138,17 +158,11 @@ var LayoutAnimation = {
   create,
   Types,
   Properties,
-  configChecker: configChecker,
+  checkConfig,
   Presets,
-  easeInEaseOut: configureNext.bind(
-    null, Presets.easeInEaseOut
-  ),
-  linear: configureNext.bind(
-    null, Presets.linear
-  ),
-  spring: configureNext.bind(
-    null, Presets.spring
-  ),
+  easeInEaseOut: configureNext.bind(null, Presets.easeInEaseOut),
+  linear: configureNext.bind(null, Presets.linear),
+  spring: configureNext.bind(null, Presets.spring),
 };
 
 module.exports = LayoutAnimation;

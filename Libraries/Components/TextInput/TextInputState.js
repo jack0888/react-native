@@ -1,25 +1,27 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule TextInputState
- * @flow
  *
  * This class is responsible for coordinating the "focused"
  * state for TextInputs. All calls relating to the keyboard
  * should be funneled through here
+ *
+ * @format
+ * @flow
  */
+
 'use strict';
 
-var Platform = require('Platform');
-var RCTUIManager = require('NativeModules').UIManager;
+const Platform = require('Platform');
+const UIManager = require('UIManager');
 
-var TextInputState = {
-   /**
+const inputs = new Set();
+
+const TextInputState = {
+  /**
    * Internal state
    */
   _currentlyFocusedID: (null: ?number),
@@ -41,19 +43,19 @@ var TextInputState = {
     if (this._currentlyFocusedID !== textFieldID && textFieldID !== null) {
       this._currentlyFocusedID = textFieldID;
       if (Platform.OS === 'ios') {
-        RCTUIManager.focus(textFieldID);
+        UIManager.focus(textFieldID);
       } else if (Platform.OS === 'android') {
-        RCTUIManager.dispatchViewManagerCommand(
+        UIManager.dispatchViewManagerCommand(
           textFieldID,
-          RCTUIManager.AndroidTextInput.Commands.focusTextInput,
-          null
+          UIManager.AndroidTextInput.Commands.focusTextInput,
+          null,
         );
       }
     }
   },
 
   /**
-   * @param {number} textFieldID id of the text field to focus
+   * @param {number} textFieldID id of the text field to unfocus
    * Unfocuses the specified text field
    * noop if it wasn't focused
    */
@@ -61,16 +63,28 @@ var TextInputState = {
     if (this._currentlyFocusedID === textFieldID && textFieldID !== null) {
       this._currentlyFocusedID = null;
       if (Platform.OS === 'ios') {
-        RCTUIManager.blur(textFieldID);
+        UIManager.blur(textFieldID);
       } else if (Platform.OS === 'android') {
-        RCTUIManager.dispatchViewManagerCommand(
+        UIManager.dispatchViewManagerCommand(
           textFieldID,
-          RCTUIManager.AndroidTextInput.Commands.blurTextInput,
-          null
+          UIManager.AndroidTextInput.Commands.blurTextInput,
+          null,
         );
       }
     }
-  }
+  },
+
+  registerInput: function(textFieldID: number) {
+    inputs.add(textFieldID);
+  },
+
+  unregisterInput: function(textFieldID: number) {
+    inputs.delete(textFieldID);
+  },
+
+  isTextInput: function(textFieldID: number) {
+    return inputs.has(textFieldID);
+  },
 };
 
 module.exports = TextInputState;
